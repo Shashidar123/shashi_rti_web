@@ -8,7 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="static/rti-intent-guard.js"></script>
     <script>
-        // Load authority mapping from JSON when served locally, with inline fallback below.
+        // Normalize external authority mapping into the shape used by the app.
         let AUTHORITY_MAPPING = {};
         function normalizeAuthorityMapping(data, fallback = {}) {
             if (!Array.isArray(data)) return data && typeof data === 'object' ? data : fallback;
@@ -29,10 +29,16 @@
             });
             return mapped;
         }
-        fetch('authority_mapping.json')
-            .then(res => res.json())
-            .then(data => { AUTHORITY_MAPPING = normalizeAuthorityMapping(data, AUTHORITY_MAPPING); })
-            .catch(err => console.warn('Could not load authority mapping, using fallback', err));
+
+        function loadExternalAuthorityMapping() {
+            return fetch('authority_mapping.json')
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.json();
+                })
+                .then(data => { AUTHORITY_MAPPING = normalizeAuthorityMapping(data, AUTHORITY_MAPPING); })
+                .catch(err => console.warn('Could not load authority mapping, using fallback', err));
+        }
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap');
@@ -1294,8 +1300,14 @@
             return level === 'Central' ? t('cpio') : t('spio');
         }
 
+        function normalizeLevel(level) {
+            const raw = String(level || '').trim().toLowerCase();
+            return LEVEL_KEYS.find(k => k.toLowerCase() === raw) || 'Mandal';
+        }
+
         function showError(containerId, msg) {
-            document.getElementById(containerId).innerHTML = `<div class="error-box">⚠️ ${msg}</div>`;
+            const cleanMsg = String(msg || '').replace(/^⚠️\s*/u, '').trim();
+            document.getElementById(containerId).innerHTML = `<div class="error-box">⚠️ ${cleanMsg}</div>`;
         }
 
         function clearError(containerId) {
@@ -1348,6 +1360,35 @@
             try {
                 localStorage.setItem('rti_gemini_cfg', JSON.stringify({ apiKey: key, model }));
             } catch (_) {}
+        }
+
+        function clearGeminiConfig() {
+            try { localStorage.removeItem('rti_gemini_cfg'); } catch (_) {}
+            const input = document.getElementById('apiKeyInput');
+            if (input) input.value = '';
+        }
+
+        function friendlyGeminiError(status, rawText) {
+            let message = '';
+            try {
+                const parsed = JSON.parse(rawText || '{}');
+                message = parsed.error?.message || '';
+            } catch (_) {
+                message = rawText || '';
+            }
+
+            const combined = `${status} ${message}`.toLowerCase();
+            if (status === 400 && (combined.includes('api key not valid') || combined.includes('invalid_argument'))) {
+                clearGeminiConfig();
+                return 'The saved Gemini API key is not valid. I cleared it from this browser; add a valid key using the settings button to enable AI drafting.';
+            }
+            if (status === 403) {
+                return 'The Gemini API key does not have permission for this request. Check that the key is active and Gemini API access is enabled.';
+            }
+            if (status === 429) {
+                return 'Gemini is rate-limited right now. Please try again later or continue with the offline fallback draft.';
+            }
+            return `Gemini API returned ${status}. Please check your API key/settings or continue with the offline fallback.`;
         }
 
         // ---------- RETRY WRAPPER WITH EXPONENTIAL BACKOFF ----------
@@ -1541,7 +1582,8 @@
             for (const key in AUTHORITY_MAPPING) {
                 if (key === 'default') continue;
                 const item = AUTHORITY_MAPPING[key];
-                for (const kw of item.keywords) {
+                const keywords = Array.isArray(item.keywords) ? item.keywords : [];
+                for (const kw of keywords) {
                     if (lower.includes(kw.toLowerCase())) {
                         return item;
                     }
@@ -1549,6 +1591,7 @@
             }
             return null;
         }
+        loadExternalAuthorityMapping();
 
         // ---------- TEMPLATES ----------
         const TEMPLATES = [{
@@ -1871,7 +1914,6 @@
             setText('genDraftBtn', 'genDraftBtn');
             setText('step2LoadingText', 'step2Loading');
             setText('step3LoadingText', 'step3Loading');
-            setText('qlLabel', 'qlLabel');
             setText('docWatermark', 'docWatermark');
             setText('readAloudBtn', 'readAloud');
             setText('copyBtn', 'copyBtn');
@@ -1963,7 +2005,8 @@
                 });
 
                 if (!resp.ok) {
-                    throw new Error(`API returned ${resp.status}`);
+                    const errText = await resp.text();
+                    throw new Error(friendlyGeminiError(resp.status, errText));
                 }
 
                 const data = await resp.json();
@@ -2109,7 +2152,7 @@
                     apiConfigMsg.style.color = 'var(--green)';
                 } else {
                     const err = await resp.text();
-                    apiConfigMsg.textContent = `❌ API error: ${resp.status} - ${err.substring(0, 100)}`;
+                    apiConfigMsg.textContent = `❌ ${friendlyGeminiError(resp.status, err)}`;
                     apiConfigMsg.style.color = '#8A2E1B';
                 }
             } catch (e) {
@@ -2234,8 +2277,9 @@
         function startFromTemplate(tmpl) {
             document.getElementById('f_summary').value = tmpl.summary || '';
             document.getElementById('f_department').value = tmpl.department || '';
-            document.getElementById('f_level').value = tmpl.level || 'Mandal';
-            document.getElementById('f_target').value = getTargetOfficer(tmpl.level || 'Mandal');
+            const level = normalizeLevel(tmpl.level);
+            document.getElementById('f_level').value = level;
+            document.getElementById('f_target').value = getTargetOfficer(level);
             const qs = tmpl.questions || [];
             document.getElementById('f_questions').value = qs.map((q, i) => (i + 1) + '. ' + q).join('\n');
             document.getElementById('confFill').style.width = '85%';
@@ -2359,7 +2403,7 @@
 
                         if (!resp.ok) {
                             const errText = await resp.text();
-                            throw new Error(`API error (${resp.status}): ${errText.substring(0, 200)}`);
+                            throw new Error(friendlyGeminiError(resp.status, errText));
                         }
 
                         const data = await resp.json();
@@ -2411,7 +2455,7 @@
                         // Populate details
                         document.getElementById('f_summary').value = parsed.summary || complaintText;
                         document.getElementById('f_department').value = parsed.department || 'Public Information Officer';
-                        const lvl = parsed.level || 'Mandal';
+                        const lvl = normalizeLevel(parsed.level);
                         document.getElementById('f_level').value = lvl;
                         document.getElementById('f_target').value = getTargetOfficer(lvl);
                         const qs = Array.isArray(parsed.questions) ? parsed.questions : AUTHORITY_MAPPING.default.questions;
@@ -2434,7 +2478,7 @@
                 // ---------- Fallback: Offline Keyword mapping with smart checks ----------
                 let matched = detectAuthorityFromText(complaintText);
                 let fallbackDept = matched ? matched.department : 'Public Works Department / Municipality';
-                let fallbackLevel = matched ? matched.level : 'Mandal';
+                let fallbackLevel = normalizeLevel(matched ? matched.level : 'Mandal');
                 let fallbackQuestions = matched && matched.questions ? matched.questions : AUTHORITY_MAPPING.default.questions;
                 let summary = complaintText;
                 let calculatedConfidence = 70;
@@ -2519,7 +2563,7 @@
         document.getElementById('genDraftBtn').addEventListener('click', async () => {
             const summary = document.getElementById('f_summary').value.trim();
             const department = document.getElementById('f_department').value.trim() || 'Public Information Officer';
-            const level = document.getElementById('f_level').value;
+            const level = normalizeLevel(document.getElementById('f_level').value);
             const targetOfficer = document.getElementById('f_target').value || getTargetOfficer(level);
             const applicantName = document.getElementById('f_name').value.trim();
             const applicantAddress = document.getElementById('f_address').value.trim();
@@ -2592,7 +2636,7 @@
 
                     if (!resp.ok) {
                         const errText = await resp.text();
-                        throw new Error(`API error (${resp.status}): ${errText.substring(0, 200)}`);
+                        throw new Error(friendlyGeminiError(resp.status, errText));
                     }
 
                     const data = await resp.json();
@@ -2649,7 +2693,8 @@
             };
             renderDraft(state.draft, department, level);
             if (!usedAi) {
-                showError('step3Error', `⚠️ AI Draft Generation: ${errorMsg}. A legally compliant fallback document has been built for you to download, edit, or print below.`);
+                const reason = String(errorMsg || 'Unknown error').replace(/[.。]+$/u, '');
+                showError('step3Error', `AI Draft Generation: ${reason}. A legally compliant fallback document has been built for you to download, edit, or print below.`);
             }
         });
 
@@ -2658,8 +2703,8 @@
             const code = langKey();
             const dict = FALLBACK_TEXTS[code] || FALLBACK_TEXTS.en;
             const lines = [];
-            lines.push(dict.to + ' ' + targetOfficer);
-            lines.push(dict.dept + ' ' + department + ' (' + level + ')');
+            lines.push(dict.to.trimEnd() + ' ' + targetOfficer);
+            lines.push(dict.dept.trimEnd() + ' ' + department + ' (' + level + ')');
             lines.push(dict.subject);
             lines.push('');
             lines.push(summary);

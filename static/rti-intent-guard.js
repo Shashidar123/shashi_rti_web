@@ -95,6 +95,14 @@
     /\b(pension|ration|road|aadhaar|aadhar|passport|caste certificate|pension|water supply|electricity bill)\b.*\b(not received|pending|delay|status|update|problem|issue)\b/i
   ];
 
+  const RECORD_STATUS_PATTERNS = [
+    /\b(pension|ration\s*card|scholarship|pmay|aadhaar|aadhar|passport|pan\s*card|caste\s*certificate|voter\s*id|electricity\s*connection)\b.*\b(application|request|complaint|benefit|payment)?\s*(status|pending|delay|not\s*received|not\s*processed)\b/i,
+    /\b(status|progress|processing\s*status|current\s*status)\b.*\b(my\s*)?(pension|ration\s*card|scholarship|pmay|aadhaar|aadhar|passport|pan\s*card|caste\s*certificate|voter\s*id|electricity\s*connection)\b.*\b(application|request|complaint|benefit|payment)?\b/i,
+    /\b(status|progress|processing\s*status|current\s*status)\b.*\b(my\s*)?(application|request|complaint)\b.*\b(pension|ration\s*card|scholarship|pmay|aadhaar|aadhar|passport|pan\s*card|caste\s*certificate|voter\s*id|electricity\s*connection)\b/i,
+    /\b(मेरी|मेरा)?\s*(पेंशन|राशन\s*कार्ड|छात्रवृत्ति|आधार|पासपोर्ट)\b.*\b(स्थिति|लंबित|विलंब)\b/,
+    /\b(పెన్షన్|రేషన్\s*కార్డ్|స్కాలర్‌షిప్|ఆధార్|పాస్‌పోర్ట్)\b.*\b(స్థితి|పెండింగ్|ఆలస్యం)\b/
+  ];
+
   const OFFLINE_RESPONSES = {
     en: {
       GREETING: 'Hello! I am your RTI assistant. Please describe the government information or records you need — for example, pension status, ration card delay, or road project documents.',
@@ -202,6 +210,9 @@
     }
     for (const p of NON_GOVT_PATTERNS) {
       if (p.test(trimmed)) return buildResult('NON_GOVERNMENT', 0.88, trimmed);
+    }
+    for (const p of RECORD_STATUS_PATTERNS) {
+      if (p.test(trimmed)) return buildResult('RTI_REQUEST', 0.92, trimmed);
     }
 
     const isGovtService = GOVT_SERVICE_PATTERNS.some(p => p.test(trimmed));

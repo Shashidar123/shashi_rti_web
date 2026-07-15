@@ -173,130 +173,153 @@
   }
 
   function detectRtiIntentHeuristic(text) {
-    const trimmed = (text || '').trim();
+    const trimmed = (text || "").trim();
 
     // ==========================================================
-    // NORMAL / NON-RTI CASES
+    // INVALID INPUT
     // ==========================================================
 
-    // Greeting
-    if (/^(hi|hello|hey|namaste|namaskar|good morning|good afternoon|good evening|good night|hii+|heyy+|hello+)[.! ]*$/i.test(trimmed)) {
-      return buildResult('GREETING', 0.99, trimmed);
+    if (!trimmed) {
+      return buildResult("INVALID_INPUT", 1.0, trimmed);
     }
 
-    // Mic Test
-    if (
-      /\b(mic|microphone|voice|audio|speaker)\b/i.test(trimmed) &&
-      /\b(test|testing|check|working|hear|listening)\b/i.test(trimmed)
-    ) {
-      return buildResult('MIC_TEST', 0.99, trimmed);
+    if (trimmed.length < 2) {
+      return buildResult("INVALID_INPUT", 0.99, trimmed);
     }
 
-    // Casual Conversation
-    if (
-      /\b(how are you|who are you|what is your name|tell me a joke|thank you|thanks|bye|goodbye|nice|awesome|great|ok|okay|fine|cool|love you)\b/i.test(trimmed)
-    ) {
-      return buildResult('CASUAL_CHAT', 0.97, trimmed);
+    if (/^[0-9\s]+$/.test(trimmed)) {
+      return buildResult("INVALID_INPUT", 0.99, trimmed);
     }
 
-    // Opinion
-    if (
-      /\b(what do you think|your opinion|do you think|recommend|suggest|which is better|best|worst|is this good|should i|your advice)\b/i.test(trimmed)
-    ) {
-      return buildResult('OPINION', 0.98, trimmed);
-    }
-
-    // Hypothetical
-    if (
-      /\b(what if|suppose|assume|imagine|future|next year|next month|will there be|will government|predict|prediction|forecast|estimate|can government)\b/i.test(trimmed)
-    ) {
-      return buildResult('HYPOTHETICAL', 0.98, trimmed);
-    }
-
-    // Personal Information
-    if (
-      /\b(phone number|mobile number|email address|home address|salary|bank account|account number|ifsc|aadhaar|aadhar|pan|passport number|wife|husband|children|family details|medical records|password|atm pin|upi pin)\b/i.test(trimmed)
-    ) {
-      return buildResult('PERSONAL_INFORMATION', 0.99, trimmed);
-    }
-
-    // Illegal Requests
-    if (
-      /\b(hack|steal|fake certificate|fake document|forge|forgery|bribe|illegal|evade tax|duplicate certificate|crack password|bypass)\b/i.test(trimmed)
-    ) {
-      return buildResult('ILLEGAL_REQUEST', 0.99, trimmed);
-    }
-
-    // National Security
-    if (
-      /\b(classified|top secret|army deployment|military operation|secret mission|border security|intelligence report|missile|army location)\b/i.test(trimmed)
-    ) {
-      return buildResult('NATIONAL_SECURITY', 0.99, trimmed);
-    }
-
-    // Non Government
-    if (
-      /\b(amazon|flipkart|google|microsoft|apple|meta|private company|private school|private hospital|boss|manager|girlfriend|boyfriend|wife|husband|family dispute|neighbor|divorce|marriage|restaurant|hotel)\b/i.test(trimmed)
-    ) {
-      return buildResult('NON_GOVERNMENT', 0.98, trimmed);
-    }
-
-    // Garbage / Random Characters
-    if (/^[a-z]{8,}$/i.test(trimmed) && !trimmed.includes(' ')) {
-      return buildResult('INVALID_INPUT', 0.98, trimmed);
-    }
-
-    // Numbers Only
-    if (/^[0-9]+$/.test(trimmed)) {
-      return buildResult('INVALID_INPUT', 0.99, trimmed);
-    }
-
-    // Symbols Only
     if (/^[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?`~ ]+$/.test(trimmed)) {
-      return buildResult('INVALID_INPUT', 0.99, trimmed);
+      return buildResult("INVALID_INPUT", 0.99, trimmed);
     }
 
-    // Same Word Repeated
+    if (/^(.)\1{5,}$/.test(trimmed.replace(/\s/g, ""))) {
+      return buildResult("INVALID_INPUT", 0.99, trimmed);
+    }
+
+    // ==========================================================
+    // GREETING
+    // ==========================================================
+
+    for (const p of GREETING_PATTERNS) {
+      if (p.test(trimmed)) {
+        return buildResult("GREETING", 0.99, trimmed);
+      }
+    }
+
+    // ==========================================================
+    // MIC TEST
+    // ==========================================================
+
+    for (const p of MIC_TEST_PATTERNS) {
+      if (p.test(trimmed)) {
+        return buildResult("MIC_TEST", 0.99, trimmed);
+      }
+    }
+
+    // ==========================================================
+    // CASUAL CHAT
+    // ==========================================================
+
+    for (const p of CASUAL_CHAT_PATTERNS) {
+      if (p.test(trimmed)) {
+        return buildResult("CASUAL_CHAT", 0.98, trimmed);
+      }
+    }
+
+    // ==========================================================
+    // ILLEGAL REQUEST
+    // ==========================================================
+
+    for (const p of ILLEGAL_PATTERNS) {
+      if (p.test(trimmed)) {
+        return buildResult("ILLEGAL_REQUEST", 0.99, trimmed);
+      }
+    }
+
+    // ==========================================================
+    // NATIONAL SECURITY
+    // ==========================================================
+
+    for (const p of NATIONAL_SECURITY_PATTERNS) {
+      if (p.test(trimmed)) {
+        return buildResult("NATIONAL_SECURITY", 0.99, trimmed);
+      }
+    }
+
+    // ==========================================================
+    // HYPOTHETICAL
+    // ==========================================================
+
+    for (const p of HYPOTHETICAL_PATTERNS) {
+      if (p.test(trimmed)) {
+        return buildResult("HYPOTHETICAL", 0.98, trimmed);
+      }
+    }
+
+    // ==========================================================
+    // OPINION
+    // ==========================================================
+
+    for (const p of OPINION_PATTERNS) {
+      if (p.test(trimmed)) {
+        return buildResult("OPINION", 0.98, trimmed);
+      }
+    }
+
+    // ==========================================================
+    // PERSONAL INFORMATION
+    // ==========================================================
+
+    for (const p of PERSONAL_PATTERNS) {
+      if (p.test(trimmed)) {
+        return buildResult("PERSONAL_INFORMATION", 0.99, trimmed);
+      }
+    }
+
+    // ==========================================================
+    // NON GOVERNMENT
+    // ==========================================================
+
+    for (const p of NON_GOVT_PATTERNS) {
+      if (p.test(trimmed)) {
+        return buildResult("NON_GOVERNMENT", 0.98, trimmed);
+      }
+    }
+
+    // ==========================================================
+    // GOVERNMENT SERVICE REQUEST
+    // ==========================================================
+
+    for (const p of GOVT_SERVICE_PATTERNS) {
+      if (p.test(trimmed)) {
+        return buildResult("GOVERNMENT_SERVICE_REQUEST", 0.95, trimmed);
+      }
+    }
+
+    // ==========================================================
+    // RANDOM SPAM
+    // ==========================================================
+
     const words = trimmed.toLowerCase().split(/\s+/);
+
     if (words.length >= 4 && new Set(words).size === 1) {
-      return buildResult('INVALID_INPUT', 0.98, trimmed);
+      return buildResult("INVALID_INPUT", 0.98, trimmed);
     }
 
-    // Random Repeated Character
-    if (/^(.)\1{5,}$/.test(trimmed.replace(/\s/g, ''))) {
-      return buildResult('INVALID_INPUT', 0.98, trimmed);
-    }
-
-    // Too Short
-    if (trimmed.split(/\s+/).length <= 2) {
-      return buildResult('AMBIGUOUS', 0.9, trimmed);
+    if (/^[a-z]{8,}$/i.test(trimmed) && !trimmed.includes(" ")) {
+      return buildResult("INVALID_INPUT", 0.98, trimmed);
     }
 
     // ==========================================================
-    // VALID RTI CHECK
+    // DEFAULT
     // ==========================================================
+    // If the request is NOT classified as any non-RTI category,
+    // assume it is an RTI request.
 
-    const isGovtService = GOVT_SERVICE_PATTERNS.some(p => p.test(trimmed));
-    const isRtiLike = RTI_REQUEST_PATTERNS.some(p => p.test(trimmed));
-
-    // Status requests (incl. scholarship) must be treated as RTI.
-    if (/\b(scholarship|छात्रवृत्ति|స్కాలర్‌షిప్)\b/i.test(trimmed) && /\b(status|pending|delay|not received|disbursal|update|लंबित|विलंब|पेंडिंग|प्रसंस्करण|स्थिति)\b/i.test(trimmed)) {
-      return buildResult('RTI_REQUEST', 0.95, trimmed);
-    }
-
-    if (isGovtService && !isRtiLike) {
-      return buildResult('GOVERNMENT_SERVICE_REQUEST', 0.90, trimmed);
-    }
-
-    if (isRtiLike) {
-      return buildResult('RTI_REQUEST', 0.95, trimmed);
-    }
-
-    // ==========================================================
-    // FINAL FALLBACK
-    // ==========================================================
-
-    return buildResult('AMBIGUOUS', 0.80, trimmed);
+    return buildResult("RTI_REQUEST", 0.90, trimmed);
   }
 
   function buildIntentGuardPrompt(userInput) {
